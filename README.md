@@ -45,7 +45,7 @@ Or set it permanently in `~/.config/gigabyte-keyboard-rgb/config.json`.
 ### Quick install
 
 ```sh
-git clone https://github.com/YOUR_USERNAME/gigabyte-keyboard-rgb.git
+git clone https://github.com/goodeesh/gigabyte-keyboard-rgb.git
 cd gigabyte-keyboard-rgb
 ./install.sh
 ```
@@ -106,8 +106,8 @@ After installing, log out and back in, or restart GNOME Shell (`Alt+F2` then `r`
 After installation, the tray app starts automatically on login via systemd. You'll see a keyboard icon in your system tray.
 
 **Menu:**
-- **Colour** — radio list of 7 static colours
-- **Brightness** — preset levels (Off, 25%, 50%, 75%, 100%)
+- **Colour** — radio list of 11 colours
+- **Brightness** — Off, Dim, Full
 - **Apply on startup** — toggle auto-apply on login
 - **Reset keyboard drivers** — re-attach kernel drivers if the keyboard stops typing
 - **Quit** — exit the tray app
@@ -115,8 +115,8 @@ After installation, the tray app starts automatically on login via systemd. You'
 ### CLI
 
 ```sh
-gigabyte-rgb static purple        # Set static purple
-gigabyte-rgb static blue --bright 50   # 50% brightness blue
+gigabyte-rgb static purple        # Set static purple (full)
+gigabyte-rgb static blue --level dim   # Dim blue
 gigabyte-rgb --cycle                   # Cycle through all colours
 gigabyte-rgb off                       # Turn backlight off
 gigabyte-rgb detect                    # Scan for compatible keyboards
@@ -126,17 +126,27 @@ gigabyte-rgb --help                    # Full help
 
 ### Colours
 
-| Name | Byte |
-|---|---|
-| Red | `0x01` |
-| Green | `0x02` |
-| Yellow | `0x03` |
-| Blue | `0x04` |
-| Orange | `0x05` |
-| Purple | `0x06` |
-| White | `0x07` |
+The keyboard firmware has a non-linear colour response — the visible hue depends on both the colour byte (byte 5) and the brightness byte (byte 4) in ways that aren't documented and weren't apparent from the original Aero W15 reverse engineering. This tool exposes the 11 distinct visible colours we confirmed experimentally on the Aero X16 (EG61VH).
 
-> Note: There is no custom RGB mode. The hardware only supports these 7 preset colours plus a rainbow/random cycle (which we do not expose as a "colour" because it triggers an animated effect that cannot be cleanly stopped once started).
+Each colour maps to a fixed `(byte5, byte4)` pair per brightness level. The Dim and Full presets use different brightness bytes (and, for some colours, different colour bytes) to keep the hue consistent:
+
+| Name | Dim `(byte5, byte4)` | Full `(byte5, byte4)` |
+|---|---|---|
+| Red | `(0x01, 0x19)` | `(0x01, 0x64)` |
+| Green | `(0x02, 0x19)` | `(0x02, 0x64)` |
+| Yellow | `(0x03, 0x19)` | `(0x03, 0x64)` |
+| Blue | `(0x04, 0x19)` | `(0x04, 0x64)` |
+| Orange | `(0x05, 0x19)` | `(0x05, 0x32)` |
+| Dark Yellow | `(0x05, 0x4B)` | `(0x05, 0x64)` |
+| Purple | `(0x06, 0x19)` | `(0x06, 0x32)` |
+| Light Purple | `(0x06, 0x5A)` | `(0x06, 0x64)` |
+| White | `(0x07, 0x19)` | `(0x07, 0x32)` |
+| Light Blue | `(0x07, 0x5A)` | `(0x07, 0x64)` |
+| Blush Pink | `(0x06, 0x4B)` | `(0x07, 0x4B)` |
+
+**Why does Dim sometimes use a different colour byte?** The Aero X16 firmware has a transitional hue zone around brightness byte `0x4B` where the purple and white colour bytes both produce blush pink instead of dimming their "high-hue" variants (Light Purple / Light Blue). To give Light Purple and Light Blue proper Dim levels we use `0x5A` (the first byte past the pink zone that locks the correct hue). Blush Pink itself is exposed as a single menu entry where Dim uses the purple colour byte (dimmer pink) and Full uses the white colour byte (brighter pink).
+
+> Note: There is no custom RGB mode. The hardware only supports these preset colour bytes plus a rainbow/random cycle (which we do not expose as a "colour" because it triggers an animated effect that cannot be cleanly stopped once started).
 
 ## How It Works
 
