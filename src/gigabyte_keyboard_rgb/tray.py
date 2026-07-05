@@ -122,7 +122,7 @@ class TrayApp:
 
         self._indicator = AppIndicator3.Indicator.new(
             APP_ID,
-            "input-keyboard",
+            "gigabyte-keyboard-rgb",
             AppIndicator3.IndicatorCategory.HARDWARE,
         )
         self._indicator.set_menu(self._menu)
