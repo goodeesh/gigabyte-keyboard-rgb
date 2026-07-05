@@ -1,5 +1,4 @@
 import sys
-import time
 import signal
 
 import gi
@@ -9,16 +8,13 @@ gi.require_version("AppIndicator3", "0.1")
 from gi.repository import Gtk, GLib, AppIndicator3
 
 from .protocol import (
-    COLOURS, COLOUR_NAMES, get_keyboard, set_static, set_off, make_command,
-    PROGRAMS, SPEEDS, send_command, VID, PID, INTERFACE,
+    COLOURS, get_keyboard, set_static, set_off, VID, PID, INTERFACE,
 )
 from .config import load as load_config, save as save_config
 
-
-COLOUR_LIST = list(COLOURS.keys())
-BRIGHTNESS_PRESETS = [0, 25, 50, 75, 100]
-
 APP_ID = "gigabyte-keyboard-rgb"
+COLOUR_LIST = list(COLOURS.keys())
+BRIGHTNESS_NAMES = ["Off", "Dim", "Full"]
 
 
 class TrayApp:
@@ -30,11 +26,11 @@ class TrayApp:
         self._brightness_items = {}
         self._startup_item = None
         self._no_keyboard = False
-
-        self._current_colour = self._config.get("colour", "purple")
-        self._current_brightness = self._config.get("brightness", 100)
-        self._startup_apply = self._config.get("startup_apply", True)
         self._building = True
+
+        self._current_colour = self._config.get("colour", "light_purple")
+        self._current_brightness = self._config.get("brightness", 2)
+        self._startup_apply = self._config.get("startup_apply", True)
 
         self._build_menu()
         self._building = False
@@ -64,13 +60,14 @@ class TrayApp:
     def _build_menu(self):
         self._menu = Gtk.Menu()
 
-        colour_section = Gtk.MenuItem(label="Colour")
-        colour_section.set_sensitive(False)
-        self._menu.append(colour_section)
+        colour_header = Gtk.MenuItem(label="Colour")
+        colour_header.set_sensitive(False)
+        self._menu.append(colour_header)
 
         colour_group = None
         for cname in COLOUR_LIST:
-            item = Gtk.RadioMenuItem(group=colour_group, label=cname.capitalize())
+            label = cname.replace("_", " ").title()
+            item = Gtk.RadioMenuItem(group=colour_group, label=label)
             if colour_group is None:
                 colour_group = item
             if cname == self._current_colour:
@@ -86,16 +83,15 @@ class TrayApp:
         self._menu.append(brightness_header)
 
         bright_group = None
-        for bpct in BRIGHTNESS_PRESETS:
-            label = "Off" if bpct == 0 else f"{bpct}%"
+        for level, label in enumerate(BRIGHTNESS_NAMES):
             item = Gtk.RadioMenuItem(group=bright_group, label=label)
             if bright_group is None:
                 bright_group = item
-            if bpct == self._current_brightness:
+            if level == self._current_brightness:
                 item.set_active(True)
-            item.connect("toggled", self._on_brightness_preset, bpct)
+            item.connect("toggled", self._on_brightness_changed, level)
             self._menu.append(item)
-            self._brightness_items[bpct] = item
+            self._brightness_items[level] = item
 
         self._menu.append(Gtk.SeparatorMenuItem())
 
@@ -138,26 +134,16 @@ class TrayApp:
             set_static(dev, self._current_colour, self._current_brightness)
         self._save_config()
 
-    def _set_brightness(self, val):
-        self._current_brightness = val
-        self._update_brightness_radio()
-        self._apply_colour()
-        self._save_config()
-
-    def _update_brightness_radio(self):
-        for bpct, item in self._brightness_items.items():
-            item.set_active(bpct == self._current_brightness)
-
     def _on_colour_changed(self, item, cname):
         if not item.get_active() or self._building:
             return
         self._current_colour = cname
         self._apply_colour()
 
-    def _on_brightness_preset(self, item, bpct):
+    def _on_brightness_changed(self, item, level):
         if not item.get_active() or self._building:
             return
-        self._current_brightness = bpct
+        self._current_brightness = level
         self._apply_colour()
 
     def _on_startup_toggled(self, item):

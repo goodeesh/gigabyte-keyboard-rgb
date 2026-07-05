@@ -7,17 +7,26 @@ VID = 0x0414
 PID = 0x8105
 INTERFACE = 3
 
-COLOURS = {
-    "red":    0x01,
-    "green":  0x02,
-    "yellow": 0x03,
-    "blue":   0x04,
-    "orange": 0x05,
-    "purple": 0x06,
-    "white":  0x07,
+COLOUR_MAP = {
+    "red":          {0: (0x01, 0x00), 1: (0x01, 0x19), 2: (0x01, 0x64)},
+    "green":        {0: (0x02, 0x00), 1: (0x02, 0x19), 2: (0x02, 0x64)},
+    "yellow":       {0: (0x03, 0x00), 1: (0x03, 0x19), 2: (0x03, 0x64)},
+    "blue":         {0: (0x04, 0x00), 1: (0x04, 0x19), 2: (0x04, 0x64)},
+    "orange":       {0: (0x05, 0x00), 1: (0x05, 0x19), 2: (0x05, 0x32)},
+    "dark_yellow":  {0: (0x05, 0x00), 1: (0x05, 0x4B), 2: (0x05, 0x64)},
+    "purple":       {0: (0x06, 0x00), 1: (0x06, 0x19), 2: (0x06, 0x32)},
+    "light_purple": {0: (0x06, 0x00), 1: (0x06, 0x5A), 2: (0x06, 0x64)},
+    "white":        {0: (0x07, 0x00), 1: (0x07, 0x19), 2: (0x07, 0x32)},
+    "light_blue":   {0: (0x07, 0x00), 1: (0x07, 0x5A), 2: (0x07, 0x64)},
+    "blush_pink":   {0: (0x07, 0x00), 1: (0x06, 0x4B), 2: (0x07, 0x4B)},
 }
 
+COLOURS = {name: mapping[2][0] for name, mapping in COLOUR_MAP.items()}
 COLOUR_NAMES = {v: k for k, v in COLOURS.items()}
+
+BRIGHTNESS_LABELS = {0: "off", 1: "dim", 2: "full"}
+
+BRIGHTNESS_LABELS = {0: "off", 1: "dim", 2: "full"}
 
 PROGRAMS = {
     "static":    0x01,
@@ -80,12 +89,19 @@ def send_command(dev, command, interface=INTERFACE):
         return False
 
 
-def set_static(dev, colour, brightness=100, interface=INTERFACE):
-    colour_id = COLOURS.get(colour)
-    if colour_id is None:
+def _banded_brightness(colour, level):
+    band = COLOUR_BAND.get(colour, "fixed")
+    return BRIGHTNESS_BANDS[band][level]
+
+
+def set_static(dev, colour, level=2, interface=INTERFACE):
+    if colour not in COLOUR_MAP:
         return False
-    brightness_byte = min(0x64, max(0x00, brightness * 0x64 // 100))
-    cmd = make_command(PROGRAMS["static"], SPEEDS["medium"], brightness_byte, colour_id)
+    level = int(level)
+    if level not in (0, 1, 2):
+        level = 2
+    byte5, byte4 = COLOUR_MAP[colour][level]
+    cmd = make_command(PROGRAMS["static"], SPEEDS["medium"], byte4, byte5)
     return send_command(dev, cmd, interface)
 
 
