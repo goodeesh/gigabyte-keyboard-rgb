@@ -1,5 +1,6 @@
 import sys
 import time
+from typing import Optional
 
 import usb.core
 import usb.util
@@ -16,7 +17,7 @@ VID = 0x0414
 PID = 0x8105
 INTERFACE = 3
 
-DEFAULT_PROFILE: DeviceProfile | None = resolve_profile(VID, PID)
+DEFAULT_PROFILE: Optional[DeviceProfile] = resolve_profile(VID, PID)
 
 COLOUR_MAP: dict = DEFAULT_PROFILE.colour_map if DEFAULT_PROFILE else {}
 COLOURS: dict = {name: mapping[2][0] for name, mapping in COLOUR_MAP.items()}

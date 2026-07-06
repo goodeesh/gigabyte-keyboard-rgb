@@ -3,7 +3,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 
 import usb.core
 
@@ -22,12 +22,12 @@ class DeviceProfile:
     vid: int
     pid: int
     name: str
-    interfaces: list[int] = field(default_factory=lambda: [1, 3])
+    interfaces: List[int] = field(default_factory=lambda: [1, 3])
     control_interface: int = 3
-    colour_map: dict[str, dict[int, tuple[int, int]]] = field(default_factory=dict)
+    colour_map: Dict[str, Dict[int, Tuple[int, int]]] = field(default_factory=dict)
 
     @property
-    def id(self) -> tuple[int, int]:
+    def id(self) -> Tuple[int, int]:
         return (self.vid, self.pid)
 
     @property
