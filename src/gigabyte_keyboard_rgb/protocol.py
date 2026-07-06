@@ -1,30 +1,27 @@
 import sys
 import time
+from typing import Optional
+
 import usb.core
 import usb.util
+
+from .profiles import (
+    DeviceProfile,
+    detect_device,
+    resolve_profile,
+    all_profiles,
+    load_builtin_profiles,
+)
 
 VID = 0x0414
 PID = 0x8105
 INTERFACE = 3
 
-COLOUR_MAP = {
-    "red":          {0: (0x01, 0x00), 1: (0x01, 0x19), 2: (0x01, 0x64)},
-    "green":        {0: (0x02, 0x00), 1: (0x02, 0x19), 2: (0x02, 0x64)},
-    "yellow":       {0: (0x03, 0x00), 1: (0x03, 0x19), 2: (0x03, 0x64)},
-    "blue":         {0: (0x04, 0x00), 1: (0x04, 0x19), 2: (0x04, 0x64)},
-    "orange":       {0: (0x05, 0x00), 1: (0x05, 0x19), 2: (0x05, 0x32)},
-    "dark_yellow":  {0: (0x05, 0x00), 1: (0x05, 0x4B), 2: (0x05, 0x64)},
-    "purple":       {0: (0x06, 0x00), 1: (0x06, 0x19), 2: (0x06, 0x32)},
-    "light_purple": {0: (0x06, 0x00), 1: (0x06, 0x5A), 2: (0x06, 0x64)},
-    "white":        {0: (0x07, 0x00), 1: (0x07, 0x19), 2: (0x07, 0x32)},
-    "light_blue":   {0: (0x07, 0x00), 1: (0x07, 0x5A), 2: (0x07, 0x64)},
-    "blush_pink":   {0: (0x07, 0x00), 1: (0x06, 0x4B), 2: (0x07, 0x4B)},
-}
+DEFAULT_PROFILE: Optional[DeviceProfile] = resolve_profile(VID, PID)
 
-COLOURS = {name: mapping[2][0] for name, mapping in COLOUR_MAP.items()}
-COLOUR_NAMES = {v: k for k, v in COLOURS.items()}
-
-BRIGHTNESS_LABELS = {0: "off", 1: "dim", 2: "full"}
+COLOUR_MAP: dict = DEFAULT_PROFILE.colour_map if DEFAULT_PROFILE else {}
+COLOURS: dict = {name: mapping[2][0] for name, mapping in COLOUR_MAP.items()}
+COLOUR_NAMES: dict = {v: k for k, v in COLOURS.items()}
 
 BRIGHTNESS_LABELS = {0: "off", 1: "dim", 2: "full"}
 
@@ -68,15 +65,28 @@ def make_command(program, speed, brightness, colour):
     return bytes(data)
 
 
-def get_keyboard(vid=VID, pid=PID):
+def get_keyboard(vid=None, pid=None, profile=None, interfaces=None):
+    if profile is not None:
+        vid, pid = profile.vid, profile.pid
+    if vid is None or pid is None:
+        detected = detect_device()
+        if detected is None:
+            return None
+        vid, pid = detected
+        if profile is None:
+            profile = resolve_profile(vid, pid)
+        if interfaces is None and profile is not None:
+            interfaces = profile.interfaces
     dev = usb.core.find(idVendor=vid, idProduct=pid)
     if dev is None:
         return None
-    for iface in [1, 3]:
+    if interfaces is None:
+        interfaces = [1, 3]
+    for iface in interfaces:
         try:
             if dev.is_kernel_driver_active(iface):
                 dev.detach_kernel_driver(iface)
-        except Exception:
+        except (usb.core.USBError, ValueError, NotImplementedError):
             pass
     return dev
 
@@ -85,56 +95,88 @@ def send_command(dev, command, interface=INTERFACE):
     try:
         dev.ctrl_transfer(0x21, 0x09, 0x0300, interface, command)
         return True
-    except Exception:
+    except (usb.core.USBError, ValueError):
         return False
 
 
-def _banded_brightness(colour, level):
-    band = COLOUR_BAND.get(colour, "fixed")
-    return BRIGHTNESS_BANDS[band][level]
-
-
-def set_static(dev, colour, level=2, interface=INTERFACE):
-    if colour not in COLOUR_MAP:
+def set_static(dev, colour, level=2, profile=None, interface=INTERFACE):
+    if profile is not None:
+        cmap = profile.colour_map
+    else:
+        cmap = COLOUR_MAP
+    if colour not in cmap:
         return False
     level = int(level)
     if level not in (0, 1, 2):
         level = 2
-    byte5, byte4 = COLOUR_MAP[colour][level]
+    byte5, byte4 = cmap[colour][level]
     cmd = make_command(PROGRAMS["static"], SPEEDS["medium"], byte4, byte5)
-    return send_command(dev, cmd, interface)
+    iface = profile.control_interface if profile else interface
+    return send_command(dev, cmd, iface)
 
 
-def set_off(dev, interface=INTERFACE):
+def set_off(dev, profile=None, interface=INTERFACE):
     cmd = make_command(PROGRAMS["static"], SPEEDS["medium"], 0x00, 0x01)
-    return send_command(dev, cmd, interface)
+    iface = profile.control_interface if profile else interface
+    return send_command(dev, cmd, iface)
 
 
 def detect_keyboards():
     keyboards = []
-    for cfg in usb.core.find(find_all=True, idVendor=VID):
-        if cfg.idProduct not in keyboards:
-            keyboards.append((cfg.idVendor, cfg.idProduct, cfg.bDeviceClass))
+    for cfg in usb.core.find(find_all=True):
+        if cfg is None:
+            continue
+        try:
+            vid = cfg.idVendor
+            pid = cfg.idProduct
+        except (AttributeError, usb.core.USBError):
+            continue
+        if vid == VID and pid not in keyboards:
+            keyboards.append((vid, pid, cfg.bDeviceClass))
     if not keyboards:
         for dev in usb.core.find(find_all=True):
+            if dev is None:
+                continue
             try:
-                if dev.manufacturer and "GIGABYTE" in str(dev.manufacturer).upper():
+                mfr = (dev.manufacturer or "").upper()
+                if "GIGABYTE" in mfr:
                     keyboards.append((dev.idVendor, dev.idProduct, dev.bDeviceClass))
-            except Exception:
+            except (AttributeError, usb.core.USBError):
                 pass
     return keyboards
 
 
 def print_detect():
-    from argparse import RawDescriptionHelpFormatter
-    kbs = detect_keyboards()
-    if not kbs:
-        print("No Gigabyte USB-HID keyboards found.")
-        print("Try: lsusb | grep -i gigabyte")
-        print("If you see a keyboard but the VID is not 0x0414,")
-        print("report it so we can add support!")
+    profiles = all_profiles()
+    print("Scanning for Gigabyte keyboards...")
+    found = detect_device()
+    if found is None:
+        print("  No Gigabyte USB keyboard detected.")
+        print()
+        print("  Try: lsusb | grep -i gigabyte")
+        print("  If you see a keyboard but it's not detected,")
+        print("  open an issue on GitHub so we can investigate!")
         return
-    for vid, pid, cls in kbs:
-        print(f"  VID={vid:04X} PID={pid:04X} class={cls}")
+    vid, pid = found
+    profile = resolve_profile(vid, pid) if found else None
+    if profile is not None:
+        print(f"  Found: VID={vid:04X} PID={pid:04X}  ({vid:04X}:{pid:04X})")
+        print(f"  Model: {profile.name}  \u2705 Supported")
+        print()
+        print(f"  Available colours: {', '.join(profile.colour_names)}")
+        print()
+        print("  To use:")
+        print(f"    gigabyte-rgb static <colour>")
+    else:
+        print(f"  Found: VID={vid:04X} PID={pid:04X}  ({vid:04X}:{pid:04X})")
+        print(f"  Model: unknown \u2014 not in profile database")
+        print(f"  \u2718 Unsupported. To add support:")
+        print(f"    gigabyte-rgb --calibrate")
+        print()
+        print(f"  Safe action:")
+        print(f"    gigabyte-rgb off")
     print()
-    print(f"Default: VID={VID:04X} PID={PID:04X} (interface {INTERFACE})")
+    print(f"Known profiles ({len(profiles)}):")
+    for key, p in sorted(profiles.items()):
+        v, pi = key
+        print(f"  {v:04X}:{pi:04X}  {p.name}")

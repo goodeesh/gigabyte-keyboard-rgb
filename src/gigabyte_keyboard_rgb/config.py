@@ -1,18 +1,14 @@
 import json
-import os
-from pathlib import Path
 
-
-CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "gigabyte-keyboard-rgb"
+from .paths import CONFIG_DIR
+from .profiles import detect_device, resolve_profile
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
 DEFAULT_CONFIG = {
     "colour": "light_purple",
     "brightness": 2,
     "startup_apply": True,
-    "vid": 0x0414,
-    "pid": 0x8105,
-    "interface": 3,
+    "profile_id": [0x0414, 0x8105],
 }
 
 _BRIGHTNESS_LEGACY_MAP = {
@@ -54,8 +50,8 @@ def _migrate_colour(col):
     col = col.lower().replace(" ", "_")
     if col in _LEGACY_COLOUR_MAP:
         return _LEGACY_COLOUR_MAP[col]
-    from .protocol import COLOURS
-    if col in COLOURS:
+    from .protocol import COLOUR_MAP
+    if col in COLOUR_MAP:
         return col
     old_to_new = {
         "rainbow": DEFAULT_CONFIG["colour"],
@@ -63,11 +59,22 @@ def _migrate_colour(col):
     return old_to_new.get(col, col)
 
 
+def _migrate_profile_id(data):
+    if "profile_id" in data:
+        return
+    vid = data.get("vid")
+    pid = data.get("pid")
+    if vid is not None and pid is not None:
+        data["profile_id"] = [int(vid) if isinstance(vid, int) else int(vid, 16),
+                              int(pid) if isinstance(pid, int) else int(pid, 16)]
+
+
 def load():
     config = dict(DEFAULT_CONFIG)
     if CONFIG_FILE.exists():
         try:
             data = json.loads(CONFIG_FILE.read_text())
+            _migrate_profile_id(data)
             if "brightness" in data:
                 data["brightness"] = _migrate_brightness(data["brightness"])
             if "colour" in data:
@@ -75,14 +82,30 @@ def load():
             config.update(data)
         except (json.JSONDecodeError, OSError):
             pass
+    if not config.get("profile_id"):
+        detected = detect_device()
+        if detected is not None:
+            config["profile_id"] = list(detected)
     return config
 
 
 def save(config):
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    safe = dict(config)
-    safe["brightness"] = int(safe.get("brightness", 2))
+    safe = {
+        "colour": config.get("colour", DEFAULT_CONFIG["colour"]),
+        "brightness": int(config.get("brightness", 2)),
+        "startup_apply": bool(config.get("startup_apply", True)),
+        "profile_id": list(config.get("profile_id", DEFAULT_CONFIG["profile_id"])),
+    }
     CONFIG_FILE.write_text(json.dumps(safe, indent=2) + "\n")
+
+
+def resolve_active_profile():
+    cfg = load()
+    pid = cfg.get("profile_id")
+    if pid and len(pid) == 2:
+        return resolve_profile(int(pid[0]), int(pid[1]))
+    return None
 
 
 def apply_from_config(dev):
@@ -90,8 +113,11 @@ def apply_from_config(dev):
     if not cfg.get("startup_apply", False):
         return False
     from .protocol import set_static, set_off
+    profile = resolve_active_profile()
     brightness = cfg.get("brightness", 2)
     if brightness == 0:
-        return set_off(dev)
+        return set_off(dev, profile)
     colour = cfg.get("colour", DEFAULT_CONFIG["colour"])
-    return set_static(dev, colour, brightness)
+    if profile is not None and colour not in profile.colour_map:
+        colour = next(iter(profile.colour_map))
+    return set_static(dev, colour, brightness, profile)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gigabyte-keyboard-rgb"
-version = "0.1.0"
+version = "0.2.0"
 description = "Control the keyboard backlight on Gigabyte Aero/AORUS laptops"
 readme = "README.md"
 license = {text = "MIT"}
@@ -32,3 +32,6 @@ gigabyte-rgb-tray = "gigabyte_keyboard_rgb.tray:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+gigabyte_keyboard_rgb = ["profile_data/*.json"]
