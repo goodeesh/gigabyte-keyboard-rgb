@@ -18,27 +18,41 @@ This tool is shared in the hope it will be useful, but with **absolutely no warr
 |---|---|---|---|---|---|
 | Gigabyte | Aero X16 (EG61VH) | AMD Ryzen AI 350 | RTX 5060 | `0414:8105` | ✅ Confirmed working |
 
-### Likely compatible (untested)
+### Supporting a new model
 
-- **Gigabyte Aero 15 W15** — Known to use the same 8-byte USB HID protocol (VID `04d9:8008` → `1044:7a39`). Source: Paul Ridgway's [blockdev.io article](https://blockdev.io/gigabyte-aero-w15-keyboard-and-linux-ubuntu/) (January 2019). Unconfirmed on this repo's code, but the protocol is identical.
-- **Gigabyte AORUS laptops** — Use Gigabyte Control Center on Windows, which communicates via the same HID interface family. Untested.
-- Other Gigabyte laptops with a USB HID keyboard under VID `0414` may work with a custom PID override.
-
-If you have one of these models, please open an issue with your `lsusb` output and confirm whether it works — verified entries will be added.
-
-### How to find your keyboard's PID
+If your Gigabyte laptop isn't listed above, the tool can still detect and control it:
 
 ```sh
-lsusb | grep -i gigabyte
+gigabyte-rgb detect              # Confirm your model is detected
+gigabyte-rgb --calibrate         # Interactive calibration (~5 min)
 ```
 
-If the PID differs from `8105`, you can override it:
+The calibration walkthrough sends colour samples to your keyboard, asks you to name
+what you see, and saves a **device profile** to
+`~/.config/gigabyte-keyboard-rgb/profiles/`. After calibration, restart the tray
+app (or use **Reload profiles** in the tray menu) to see full colour/brightness
+controls for your model.
 
+**You can still turn the backlight off** right now, even without calibration:
 ```sh
-gigabyte-rgb --pid 0x8105 static purple
+gigabyte-rgb off
 ```
 
-Or set it permanently in `~/.config/gigabyte-keyboard-rgb/config.json`.
+To share your new profile with the community, submit the generated JSON file as
+a [GitHub issue](https://github.com/goodeesh/gigabyte-keyboard-rgb/issues/new)
+— we will add it to the built-in profile list in the next release.
+
+### Built-in profiles
+
+Known models are shipped as JSON files inside the package at
+`src/gigabyte_keyboard_rgb/profile_data/`. The current built-in set is:
+
+| VID:PID | Model | Since |
+|---|---|---|
+| `0414:8105` | Gigabyte Aero X16 (EG61VH) | v0.1.0 |
+
+User profiles in `~/.config/gigabyte-keyboard-rgb/profiles/` override built-ins
+if they share the same VID:PID.
 
 ## Installation
 
@@ -117,13 +131,14 @@ Once running, you'll see a keyboard icon in your system tray.
 ### CLI
 
 ```sh
-gigabyte-rgb static purple        # Set static purple (full)
-gigabyte-rgb static blue --level dim   # Dim blue
-gigabyte-rgb --cycle                   # Cycle through all colours
-gigabyte-rgb off                       # Turn backlight off
-gigabyte-rgb detect                    # Scan for compatible keyboards
-gigabyte-rgb --reset                   # Re-attach keyboard drivers
-gigabyte-rgb --help                    # Full help
+gigabyte-rgb static purple               # Set static purple (full)
+gigabyte-rgb static blue --level dim     # Dim blue
+gigabyte-rgb --cycle                     # Cycle through all colours
+gigabyte-rgb off                         # Turn backlight off
+gigabyte-rgb detect                      # Scan for compatible keyboards
+gigabyte-rgb --calibrate                 # Interactive calibration for new models
+gigabyte-rgb --reset                     # Re-attach keyboard drivers
+gigabyte-rgb --help                      # Full help
 ```
 
 ### Colours
@@ -208,7 +223,12 @@ These are available via the CLI but **not exposed in the tray menu** because som
 gigabyte-keyboard-rgb/
 ├── src/gigabyte_keyboard_rgb/
 │   ├── __init__.py         # Package metadata
-│   ├── protocol.py         # USB protocol: constants, command building, send
+│   ├── paths.py            # Shared path constants (CONFIG_DIR)
+│   ├── profiles.py         # Device profiles: detect, resolve, calibrate
+│   ├── profile_data/       # Built-in JSON device profiles
+│   │   ├── __init__.py
+│   │   └── 0414_8105.json
+│   ├── protocol.py         # USB protocol: command building, send, set_static
 │   ├── cli.py              # CLI interface (gigabyte-rgb command)
 │   ├── config.py           # JSON config persistence
 │   └── tray.py             # AppIndicator3 tray app (gigabyte-rgb-tray)
@@ -219,7 +239,9 @@ gigabyte-keyboard-rgb/
 │   └── gigabyte-keyboard-rgb-tray.desktop
 ├── install.sh              # Cross-distro installer
 ├── uninstall.sh            # Uninstaller
-├── tests/test_protocol.py  # Checksum tests
+├── tests/
+│   ├── test_protocol.py    # Protocol unit tests
+│   └── test_profiles.py    # Profile unit tests
 ├── pyproject.toml          # PEP 621 build metadata
 ├── LICENSE                 # MIT license
 ├── README.md               # This file
@@ -247,12 +269,19 @@ MIT License — see [LICENSE](LICENSE).
 
 ## Contributing
 
-Contributions are welcome! Areas that need the most help:
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for full details,
+especially on adding support for a new model.
 
-- **Testing on more hardware** — If you have a Gigabyte Aero or AORUS laptop running Linux, please test and report!
-- **Per-key custom layouts** — The protocol supports sending per-key RGB data (documented in Paul's article). Implementing a custom layout editor or loading presets would be a great addition.
-- **Effects safety** — Investigate which effect codes are safe and which cause firmware hangs.
-- **Packaging** — Help packaging for more distributions (Flatpak, Fedora COPR, Arch AUR, etc.).
+Key areas:
+- **Testing on more hardware** — Run `gigabyte-rgb detect` and `--calibrate`, then
+  [submit your profile](CONTRIBUTING.md#adding-a-new-model) as a JSON file.
+- **Per-key custom layouts** — The protocol supports sending per-key RGB data
+  (documented in Paul's article). Implementing a custom layout editor or loading
+  presets would be a great addition.
+- **Effects safety** — Investigate which effect codes are safe and which cause
+  firmware hangs.
+- **Packaging** — Help packaging for more distributions (Flatpak, Fedora COPR,
+  Arch AUR, etc.).
 - **Translation** — Internationalise the tray menu labels.
 
 ## Uninstalling

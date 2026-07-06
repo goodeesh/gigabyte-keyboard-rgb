@@ -8,9 +8,9 @@ Be kind. This is a hobby project maintained in spare time. Patience and clear co
 
 ## Ways to contribute
 
-- **Hardware testing** — The single most valuable thing you can do is test the tool on a model not listed in the [tested hardware table](README.md#tested-hardware) and report back (issue or PR with the result and your `lsusb` output).
+- **Hardware testing** — Run `gigabyte-rgb detect` and `--calibrate` on a model not in the [hardware table](README.md#tested-hardware), then [submit the resulting JSON](#adding-a-new-model) as a profile.
 - **Bug reports** — If something doesn't work, please open an issue with the steps to reproduce, your distro, kernel version, and `lsusb` output.
-- **Code improvements** — Per-key custom layouts, new model support, packaging, translations, and CI improvements are all welcome.
+- **Code improvements** — Per-key custom layouts, packaging, translations, and CI improvements are all welcome.
 - **Documentation** — Typos, clarifications, and new model entries are appreciated.
 
 ## Before you start
@@ -99,21 +99,68 @@ The `master` branch has the following protection enabled:
 - Don't add comments unless the code is genuinely non-obvious.
 - Keep functions short and focused.
 
-## Adding support for a new keyboard
+## Adding a new model
 
-If your keyboard isn't recognised by the tool:
+The tool has a **calibration system** that lets you add support for any
+Gigabyte USB keyboard without writing code.
 
-1. Run `gigabyte-rgb detect` (or `lsusb | grep -i gigabyte`) to find your VID/PID.
-2. Try running the CLI with `--vid` and `--pid` overrides:
+### For users (no code needed)
+
+1. **Install** the tool as described in the [README](README.md#installation)
+2. **Run detection**:
    ```sh
-   gigabyte-rgb --vid 0x0414 --pid 0xXXXX static purple
+   gigabyte-rgb detect
    ```
-3. If it works, open an issue with:
-   - Your exact laptop model and CPU/GPU
-   - The full `lsusb` line for the keyboard
-   - Which colours and brightness levels you tested
-   - Whether the tray app works with your PID (you may need to add it to the udev rule)
-4. If you're comfortable editing Python, open a PR adding your PID to the udev rule and any constants that need updating, plus an entry in the tested-hardware table in the README.
+3. **Run calibration** (interactive, ~5 minutes):
+   ```sh
+   gigabyte-rgb --calibrate
+   ```
+   You will be prompted to name colours as the keyboard cycles through
+   `(byte5, byte4)` sample points. The tool saves a JSON profile to
+   `~/.config/gigabyte-keyboard-rgb/profiles/{VID}_{PID}.json`.
+4. **Use the profile**: Click **Reload profiles** in the tray menu, or
+   restart the service: `systemctl --user restart gigabyte-keyboard-rgb.service`
+5. **Share your work**: Open a
+   [GitHub issue](https://github.com/goodeesh/gigabyte-keyboard-rgb/issues/new)
+   and attach the JSON file. We'll add it to the built-in set.
+
+### For contributors (adding a built-in profile)
+
+If you have calibration JSON from a tested laptop, you can add it as a
+built-in profile in a PR:
+
+1. Copy the JSON to `src/gigabyte_keyboard_rgb/profile_data/{VID}_{PID}.json`
+2. Ensure the file follows the schema (see any existing file as a template)
+3. Run the tests: `python -m pytest tests/ -v`
+4. Open a PR as described in [Making changes](#making-changes)
+
+### Profile JSON schema
+
+```json
+{
+  "name": "Gigabyte Aorus 15BKF",
+  "vid": "0x0414",
+  "pid": "0x7A43",
+  "interfaces": [1, 3],
+  "control_interface": 3,
+  "colour_map": {
+    "red":   {"0": [1, 0],   "1": [1, 25],  "2": [1, 100]},
+    "green": {"0": [2, 0],   "1": [2, 25],  "2": [2, 100]}
+  }
+}
+```
+
+| Field | Description |
+|---|---|
+| `name` | Human-readable model name |
+| `vid` / `pid` | USB VID and PID as hex strings |
+| `interfaces` | USB interfaces to detach (typically `[1, 3]`) |
+| `control_interface` | Interface for `ctrl_transfer` (typically `3`) |
+| `colour_map` | Map of colour name → brightness level `"0"/"1"/"2"` → `[byte5, byte4]` |
+
+Profile JSON files in `~/.config/gigabyte-keyboard-rgb/profiles/` override
+built-in files with the same `(VID, PID)`, so users can customise without
+modifying the package.
 
 ## Releasing a new version
 

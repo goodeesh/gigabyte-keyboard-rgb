@@ -3,6 +3,7 @@ from gigabyte_keyboard_rgb.protocol import (
     make_checksum, make_command, COLOURS, COLOUR_MAP, BRIGHTNESS_LABELS,
     set_static,
 )
+from gigabyte_keyboard_rgb.profiles import DeviceProfile
 
 
 def test_red_full():
@@ -95,4 +96,28 @@ def test_set_static_blush_pink_full():
 def test_set_static_invalid_colour():
     dev = FakeDev()
     assert set_static(dev, "nonexistent", 2) is False
+    assert dev.last_cmd is None
+
+
+def test_set_static_with_custom_profile():
+    custom = DeviceProfile(
+        vid=0x0414, pid=0x7A3C, name="Test",
+        interfaces=[1, 3], control_interface=3,
+        colour_map={"x": {0: (1, 0), 1: (1, 50), 2: (1, 100)}},
+    )
+    dev = FakeDev()
+    set_static(dev, "x", 2, profile=custom)
+    # byte5=1, byte4=100, checksum = (255 - sum([0x08, 0x00, 0x01, 0x06, 100, 1, 0x01])) & 0xFF
+    # = (255 - (8+0+1+6+100+1+1)) = 255-117 = 138 = 0x8A
+    assert dev.last_cmd == bytes([0x08, 0x00, 0x01, 0x06, 100, 1, 0x01, 0x8A])
+
+
+def test_set_static_custom_profile_unknown_colour():
+    custom = DeviceProfile(
+        vid=0x0414, pid=0x7A3C, name="Test",
+        interfaces=[1, 3], control_interface=3,
+        colour_map={"red": {0: (1, 0), 1: (1, 50), 2: (1, 100)}},
+    )
+    dev = FakeDev()
+    assert set_static(dev, "blue", 2, profile=custom) is False
     assert dev.last_cmd is None
