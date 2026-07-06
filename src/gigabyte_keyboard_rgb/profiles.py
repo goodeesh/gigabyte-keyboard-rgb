@@ -31,18 +31,18 @@ class DeviceProfile:
         return (self.vid, self.pid)
 
     @property
-    def colour_names(self) -> list[str]:
+    def colour_names(self) -> List[str]:
         return list(self.colour_map.keys())
 
-    def colour_byte(self, name: str, level: int) -> tuple[int, int]:
+    def colour_byte(self, name: str, level: int) -> Tuple[int, int]:
         return self.colour_map[name][level]
 
     @property
-    def full_map(self) -> dict[str, int]:
+    def full_map(self) -> Dict[str, int]:
         return {name: mapping[2][0] for name, mapping in self.colour_map.items()}
 
     @property
-    def reverse_map(self) -> dict[int, str]:
+    def reverse_map(self) -> Dict[int, str]:
         return {v: k for k, v in self.full_map.items()}
 
     def to_dict(self) -> dict:
@@ -75,7 +75,7 @@ class DeviceProfile:
         )
 
 
-def load_builtin_profiles() -> dict[tuple[int, int], DeviceProfile]:
+def load_builtin_profiles() -> Dict[Tuple[int, int], DeviceProfile]:
     profiles = {}
     if not BUILTIN_DATA_DIR.is_dir():
         return profiles
@@ -89,7 +89,7 @@ def load_builtin_profiles() -> dict[tuple[int, int], DeviceProfile]:
     return profiles
 
 
-def load_user_profiles() -> dict[tuple[int, int], DeviceProfile]:
+def load_user_profiles() -> Dict[Tuple[int, int], DeviceProfile]:
     profiles = {}
     if not USER_PROFILES_DIR.is_dir():
         return profiles
@@ -103,14 +103,14 @@ def load_user_profiles() -> dict[tuple[int, int], DeviceProfile]:
     return profiles
 
 
-def all_profiles() -> dict[tuple[int, int], DeviceProfile]:
+def all_profiles() -> Dict[Tuple[int, int], DeviceProfile]:
     profiles = load_builtin_profiles()
     for key, profile in load_user_profiles().items():
         profiles[key] = profile
     return profiles
 
 
-def detect_device() -> tuple[int, int] | None:
+def detect_device() -> Optional[Tuple[int, int]]:
     try:
         for dev in usb.core.find(find_all=True):
             if dev is None:
@@ -136,7 +136,7 @@ def detect_device() -> tuple[int, int] | None:
     return None
 
 
-def resolve_profile(vid: int | None = None, pid: int | None = None) -> DeviceProfile | None:
+def resolve_profile(vid: Optional[int] = None, pid: Optional[int] = None) -> Optional[DeviceProfile]:
     if vid is None or pid is None:
         detected = detect_device()
         if detected is None:
@@ -168,7 +168,7 @@ def _send_raw(dev, byte5: int, byte4: int, iface: int):
     dev.ctrl_transfer(0x21, 0x09, 0x0300, iface, cmd)
 
 
-def calibrate(dev, vid: int, pid: int) -> DeviceProfile | None:
+def calibrate(dev, vid: int, pid: int) -> Optional[DeviceProfile]:
     from .protocol import make_command
 
     print()
@@ -250,7 +250,7 @@ def calibrate(dev, vid: int, pid: int) -> DeviceProfile | None:
     print(f"  Found {len(found)} colour(s): {', '.join(found.values())}")
     print()
 
-    colour_map: dict[str, dict[int, tuple[int, int]]] = {}
+    colour_map: Dict[str, Dict[int, Tuple[int, int]]] = {}
 
     print("Step 2: Checking for hue variation at dim (0x19) and full (0x64)")
     print("  For each colour, we'll send dim then full and ask if it's the same.")
