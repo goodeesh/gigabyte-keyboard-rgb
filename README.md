@@ -75,7 +75,7 @@ The installer will:
 
 ```sh
 # System dependencies (Arch)
-sudo pacman -S python-pyusb python-gobject gtk3 libappindicator-gtk3
+sudo pacman -S python-pyusb python-gobject python-pip gtk3 libappindicator-gtk3
 
 # System dependencies (Debian/Ubuntu)
 sudo apt install python3-usb python3-gi python3-gi-cairo gir1.2-appindicator3-0.1 gir1.2-gtk-3.0

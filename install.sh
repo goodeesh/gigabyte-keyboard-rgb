@@ -40,8 +40,8 @@ install_system_deps() {
 
     case "$distro" in
         arch|archlinux|endeavouros|cachyos)
-            info "Installing Arch packages: python-pyusb python-gobject gtk3 libappindicator-gtk3"
-            sudo pacman -S --needed python-pyusb python-gobject gtk3 libappindicator-gtk3
+            info "Installing Arch packages: python-pyusb python-gobject python-pip gtk3 libappindicator-gtk3"
+            sudo pacman -S --needed python-pyusb python-gobject python-pip gtk3 libappindicator-gtk3
             ;;
         debian|ubuntu|pop|mint)
             info "Installing Debian/Ubuntu packages: python3-usb python3-gi python3-gi-cairo gir1.2-appindicator3-0.1 gir1.2-gtk-3.0"
